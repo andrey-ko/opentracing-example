@@ -1,0 +1,171 @@
+gradle.startParameter.showStacktrace = ShowStacktrace.ALWAYS
+gradle.startParameter.logLevel = LogLevel.DEBUG
+//logging.captureStandardOutput LogLevel.LIFECYCLE
+
+buildscript {
+  repositories {
+    mavenCentral()
+    jcenter()
+    maven { url "https://oss.sonatype.org/content/repositories/snapshots" }
+  }
+  dependencies {
+    classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlinVersion"
+
+    classpath "com.satori:satori-libs-gradle-transform:$composerVersion"
+    classpath "com.satori:satori-libs-gradle-docker:$composerVersion"
+    classpath "com.satori:satori-libs-gradle-codegen:$composerVersion"
+    classpath "com.satori:satori-gradle-composer-plugin:$composerVersion"
+
+    classpath "com.google.gradle:osdetector-gradle-plugin:+"
+  }
+}
+
+group group
+version version
+buildDir = '.out'
+
+apply plugin: "idea"
+idea {
+  module {
+    inheritOutputDirs = false
+    outputDir = file("$buildDir/idea")
+    testOutputDir = file("$buildDir/idea-tests")
+  }
+}
+
+apply plugin: 'com.google.osdetector'
+apply plugin: 'com.satori.codegen'
+apply plugin: "com.satori.transform"
+apply plugin: "com.satori.composer"
+apply plugin: "com.satori.docker"
+
+
+ext {
+  pckg = "$group.${codeFormatter.packageName(name)}"
+  pckgDir = pckg.replace('.', '/')
+}
+
+apply plugin: "java"
+
+sourceSets.main.java.srcDirs = ['src']
+sourceSets.main.resources.srcDirs = ['res']
+sourceSets.test.java.srcDirs = ['tests/src']
+sourceSets.test.resources.srcDirs = ['tests/res']
+
+sourceCompatibility = JavaVersion.VERSION_1_10
+targetCompatibility = JavaVersion.VERSION_1_10
+
+
+apply plugin: "kotlin"
+
+kotlin {
+  experimental {
+    coroutines 'enable'
+  }
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
+  kotlinOptions {
+    jvmTarget = JavaVersion.VERSION_1_8
+  }
+}
+
+sourceSets.main.kotlin.srcDirs = sourceSets.main.java.srcDirs
+sourceSets.test.kotlin.srcDirs = sourceSets.test.java.srcDirs
+
+
+task createDefaultProjectStructure {
+  group 'codegen'
+  doLast {
+    println "creating default project structure for project '${project.name}'..."
+
+    // create directories for all source sets
+    sourceSets.forEach { sourceSet ->
+      sourceSet.java.srcDirs.forEach {
+        def pathToCreate = new File(it, pckgDir)
+        println "creating sources path for '${sourceSet.name}': '$pathToCreate'"
+        pathToCreate.mkdirs()
+      }
+      sourceSet.resources.srcDirs.forEach {
+        def pathToCreate = new File(it, pckgDir)
+        println "creating resources path for '${sourceSet.name}': '$pathToCreate'"
+        pathToCreate.mkdirs()
+      }
+    }
+
+    // generate build.gradle
+    if (!file("build.gradle").exists() && file("build.template.gradle").exists()) {
+      println "creating build.gadle: '${file('build.gradle')}'"
+      transform {
+        template = rootProject.file('build.template.gradle')
+        output = file('build.gradle')
+      }
+    }
+  }
+}
+
+sourceSets.all { sourceSet ->
+  def n = sourceSet.name
+  n = n != "main" ? n.capitalize() : ""
+  def taskName = "generate${n}Code"
+  println "defining task: '${project.name}:${taskName}'"
+  def t = task "generate${n}Code"() {
+    group 'codegen'
+  }
+  tasks["compile${n}Java"].dependsOn t
+  tasks["compile${n}Kotlin"].dependsOn t
+}
+
+task runJaegerContainer(type: DockerRunContainerTask) {
+  group 'docker'
+
+  runArgs = [
+    "-p", "5775:5775/udp",
+    "-p", "16686:16686"
+  ]
+  imageName = "jaegertracing/all-in-one:latest"
+  containerName = "${codeFormatter.kebab(project.name)}-jaegertracing"
+}
+
+task stopJaegerContainer(type: DockerStopContainerTask) {
+  group 'docker'
+  containerName = "${codeFormatter.kebab(project.name)}-jaegertracing"
+}
+
+repositories {
+  jcenter()
+  mavenCentral()
+  maven { url "https://oss.sonatype.org/content/repositories/snapshots" }
+}
+
+// main dependencies
+dependencies {
+  compile "org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion"
+  compile "org.jetbrains.kotlinx:kotlinx-coroutines-jdk8:$kotlinCoroutinesVersion"
+  //compile "io.opentracing:opentracing-api:$openTracingVersion"
+  //compile "com.uber.jaeger:jaeger-core:$jaegerVersion"
+
+  compile "io.jaegertracing:jaeger-core:$jaegerVersion"
+  compile "io.jaegertracing:jaeger-micrometer:$jaegerVersion"
+  //compile "com.uber.jaeger:jaeger-core:$jaegerVersion"
+  //compile "com.uber.jaeger:jaeger-micrometer:$jaegerVersion"
+
+
+  compile "org.slf4j:slf4j-api:$slf4jVersion"
+  compile "org.slf4j:slf4j-jdk14:$slf4jVersion"
+
+  /*
+  compile satoriLibsVertxKotlin()
+  compile satoriLibsAsyncKotlin()
+  compile satoriLibsCommonKotlin()
+
+  compile "io.vertx:vertx-core:$vertxVersion"
+  compile "io.vertx:vertx-codegen:$vertxVersion"
+  compile "io.vertx:vertx-hazelcast:$vertxVersion"
+
+  compile "com.google.dagger:dagger:$daggerVersion"
+  compile "com.google.errorprone:error_prone_core:$errorProneVersion"
+
+  compile "com.google.protobuf:protobuf-java:$protobufVersion"*/
+
+}
