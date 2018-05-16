@@ -4,7 +4,7 @@ import java.util.*
 
 class BankService : IBank {
   
-  val accounts = HashMap<String, AccountRecord>()
+  private val accounts = HashMap<String, AccountRecord>()
   
   override fun getBalance(accountId: String): Double {
     Thread.sleep(10)

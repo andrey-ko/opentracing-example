@@ -73,6 +73,12 @@ tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
 sourceSets.main.kotlin.srcDirs = sourceSets.main.java.srcDirs
 sourceSets.test.kotlin.srcDirs = sourceSets.test.java.srcDirs
 
+apply plugin: "application"
+mainClassName = "${pckg}.App"
+startScripts {
+  //defaultJvmOpts = ["-server", "-d64"]
+  optsEnvironmentVar = "APP_OPTS"
+}
 
 task createDefaultProjectStructure {
   group 'codegen'
