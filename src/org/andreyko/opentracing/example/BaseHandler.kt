@@ -21,17 +21,12 @@ abstract class BaseHandler(
     val action = opts["action"] ?: throw Exception("action not specified")
     val args = msg.payload as Array<Any>
   
-    val traceContext = opts["trace-context"]?.let {
-      SpanContext.contextFromString(it)
-    }
-    
-    val scope = tracer.buildSpan(action).apply {
-      if(traceContext != null) asChildOf(traceContext)
-    }.startActive(true)
-    try {
+    tracer.buildSpan(action).apply {
+      opts["trace-context"]?.let {
+        asChildOf(SpanContext.contextFromString(it))
+      }
+    }.startActive(true).use {
       return Message(invokeBlocked(action, *args), null)
-    } finally {
-      scope.close()
     }
   }
   
