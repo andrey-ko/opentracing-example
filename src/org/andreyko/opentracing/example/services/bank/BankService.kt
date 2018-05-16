@@ -1,5 +1,7 @@
 package org.andreyko.opentracing.example.services.bank
 
+import io.jaegertracing.*
+import org.andreyko.opentracing.example.*
 import java.util.*
 
 class BankService : IBank {
@@ -14,6 +16,11 @@ class BankService : IBank {
   
   override fun withdraw(accountId: String, amount: Double): Double {
     Thread.sleep(100)
+    
+    (App.scopeManager.active().span() as Span).tracer.buildSpan("get-balance").startActive(true).use {
+      if (getBalance(accountId) < amount) throw Exception("not enough balance")
+    }
+    
     val rec = accounts[accountId] ?: throw Exception("account not found")
     rec.balance -= amount
     return rec.balance
